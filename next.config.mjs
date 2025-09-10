@@ -9,7 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  output: 'export',
+  output: 'export',   // ensures `out/` is generated
   trailingSlash: true,
   basePath: process.env.NODE_ENV === 'production' ? '/html-cleanser-tool' : '',
   assetPrefix: process.env.NODE_ENV === 'production' ? '/html-cleanser-tool/' : '',

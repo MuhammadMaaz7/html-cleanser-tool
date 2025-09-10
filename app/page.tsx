@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, Download, Eye, EyeOff, X, FileText } from "lucide-react"
+import { Upload, Download, Eye, EyeOff, X, FileText, AlertCircle } from "lucide-react"
 
 export default function HTMLTagRemover() {
   const [files, setFiles] = useState<File[]>([])
@@ -19,10 +19,161 @@ export default function HTMLTagRemover() {
   const [showPreview, setShowPreview] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [selectedPreviewFile, setSelectedPreviewFile] = useState<string>("")
+  const [fileError, setFileError] = useState("")
+  const [tagError, setTagError] = useState("")
 
   const commonTags = ["a", "script", "iframe", "div", "span", "img", "style"]
 
   const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB in bytes
+
+  const validHTMLTags = new Set([
+    "a",
+    "abbr",
+    "address",
+    "area",
+    "article",
+    "aside",
+    "audio",
+    "b",
+    "base",
+    "bdi",
+    "bdo",
+    "blockquote",
+    "body",
+    "br",
+    "button",
+    "canvas",
+    "caption",
+    "cite",
+    "code",
+    "col",
+    "colgroup",
+    "data",
+    "datalist",
+    "dd",
+    "del",
+    "details",
+    "dfn",
+    "dialog",
+    "div",
+    "dl",
+    "dt",
+    "em",
+    "embed",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "head",
+    "header",
+    "hgroup",
+    "hr",
+    "html",
+    "i",
+    "iframe",
+    "img",
+    "input",
+    "ins",
+    "kbd",
+    "label",
+    "legend",
+    "li",
+    "link",
+    "main",
+    "map",
+    "mark",
+    "meta",
+    "meter",
+    "nav",
+    "noscript",
+    "object",
+    "ol",
+    "optgroup",
+    "option",
+    "output",
+    "p",
+    "param",
+    "picture",
+    "pre",
+    "progress",
+    "q",
+    "rp",
+    "rt",
+    "ruby",
+    "s",
+    "samp",
+    "script",
+    "section",
+    "select",
+    "small",
+    "source",
+    "span",
+    "strong",
+    "style",
+    "sub",
+    "summary",
+    "sup",
+    "table",
+    "tbody",
+    "td",
+    "template",
+    "textarea",
+    "tfoot",
+    "th",
+    "thead",
+    "time",
+    "title",
+    "tr",
+    "track",
+    "u",
+    "ul",
+    "var",
+    "video",
+    "wbr",
+  ])
+
+  const validateFile = (file: File): { isValid: boolean; error?: string } => {
+    const isHTML = file.name.toLowerCase().endsWith(".html") || file.name.toLowerCase().endsWith(".htm")
+    const isValidSize = file.size <= MAX_FILE_SIZE
+
+    if (!isHTML) {
+      return { isValid: false, error: `${file.name} is not an HTML file. Only .html and .htm files are allowed.` }
+    }
+    if (!isValidSize) {
+      return { isValid: false, error: `${file.name} exceeds the 100MB limit.` }
+    }
+
+    return { isValid: true }
+  }
+
+  const validateTags = (tagsString: string): { isValid: boolean; error?: string; invalidTags?: string[] } => {
+    if (!tagsString.trim()) {
+      return { isValid: false, error: "Please enter at least one tag to remove." }
+    }
+
+    const tags = tagsString
+      .split(",")
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean)
+    const invalidTags = tags.filter((tag) => !validHTMLTags.has(tag))
+
+    if (invalidTags.length > 0) {
+      return {
+        isValid: false,
+        error: `Invalid HTML tags: ${invalidTags.join(", ")}. Please enter valid HTML tag names.`,
+        invalidTags,
+      }
+    }
+
+    return { isValid: true }
+  }
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -37,39 +188,51 @@ export default function HTMLTagRemover() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
+    setFileError("")
 
-    const droppedFiles = Array.from(e.dataTransfer.files).filter((file) => {
-      const isHTML = file.name.endsWith(".html") || file.name.endsWith(".htm")
-      const isValidSize = file.size <= MAX_FILE_SIZE
+    const droppedFiles = Array.from(e.dataTransfer.files)
+    const validFiles: File[] = []
+    const errors: string[] = []
 
-      if (!isHTML) {
-        alert(`${file.name} is not an HTML file and will be skipped.`)
+    droppedFiles.forEach((file) => {
+      const validation = validateFile(file)
+      if (validation.isValid) {
+        validFiles.push(file)
+      } else {
+        errors.push(validation.error!)
       }
-      if (!isValidSize) {
-        alert(`${file.name} exceeds the 100MB limit and will be skipped.`)
-      }
-
-      return isHTML && isValidSize
     })
 
-    if (droppedFiles.length > 0) {
-      setFiles((prev) => [...prev, ...droppedFiles])
+    if (errors.length > 0) {
+      setFileError(errors.join(" "))
+    }
+
+    if (validFiles.length > 0) {
+      setFiles((prev) => [...prev, ...validFiles])
     }
   }, [])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || []).filter((file) => {
-      const isValidSize = file.size <= MAX_FILE_SIZE
+    setFileError("")
+    const selectedFiles = Array.from(e.target.files || [])
+    const validFiles: File[] = []
+    const errors: string[] = []
 
-      if (!isValidSize) {
-        alert(`${file.name} exceeds the 100MB limit and will be skipped.`)
+    selectedFiles.forEach((file) => {
+      const validation = validateFile(file)
+      if (validation.isValid) {
+        validFiles.push(file)
+      } else {
+        errors.push(validation.error!)
       }
-
-      return isValidSize
     })
 
-    if (selectedFiles.length > 0) {
-      setFiles((prev) => [...prev, ...selectedFiles])
+    if (errors.length > 0) {
+      setFileError(errors.join(" "))
+    }
+
+    if (validFiles.length > 0) {
+      setFiles((prev) => [...prev, ...validFiles])
     }
 
     e.target.value = ""
@@ -91,6 +254,7 @@ export default function HTMLTagRemover() {
     setFiles([])
     setProcessedFiles({})
     setSelectedPreviewFile("")
+    setFileError("")
   }
 
   const addCommonTag = (tag: string) => {
@@ -100,11 +264,33 @@ export default function HTMLTagRemover() {
       .filter(Boolean)
     if (!currentTags.includes(tag)) {
       setTagsToRemove(currentTags.concat(tag).join(", "))
+      setTagError("") // Clear tag error when adding valid tags
+    }
+  }
+
+  const handleTagsChange = (value: string) => {
+    setTagsToRemove(value)
+    setTagError("")
+
+    if (value.trim()) {
+      const validation = validateTags(value)
+      if (!validation.isValid) {
+        setTagError(validation.error!)
+      }
     }
   }
 
   const processHTML = async () => {
-    if (files.length === 0 || !tagsToRemove.trim()) return
+    const tagValidation = validateTags(tagsToRemove)
+    if (!tagValidation.isValid) {
+      setTagError(tagValidation.error!)
+      return
+    }
+
+    if (files.length === 0) {
+      setFileError("Please upload at least one HTML file.")
+      return
+    }
 
     const processed: { [key: string]: string } = {}
 
@@ -188,13 +374,14 @@ export default function HTMLTagRemover() {
           <CardHeader className="pb-4">
             <CardTitle className="text-lg sm:text-xl">Upload HTML Files</CardTitle>
             <CardDescription className="text-sm">
-              Drag and drop your HTML files or click to browse (up to 100MB per file)
+              Drag and drop your HTML files or click to browse (up to 100MB per file, .html and .htm only)
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div
-              className={`border-2 border-dashed rounded-lg p-4 sm:p-6 lg:p-8 text-center transition-colors ${isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-                }`}
+              className={`border-2 border-dashed rounded-lg p-4 sm:p-6 lg:p-8 text-center transition-colors ${
+                isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+              }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -271,6 +458,12 @@ export default function HTMLTagRemover() {
                 </div>
               )}
             </div>
+            {fileError && (
+              <div className="mt-3 flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">{fileError}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -288,9 +481,15 @@ export default function HTMLTagRemover() {
                 id="tags-input"
                 placeholder="e.g., a, script, iframe, div"
                 value={tagsToRemove}
-                onChange={(e) => setTagsToRemove(e.target.value)}
-                className="text-sm sm:text-base"
+                onChange={(e) => handleTagsChange(e.target.value)}
+                className={`text-sm sm:text-base ${tagError ? "border-destructive focus-visible:ring-destructive" : ""}`}
               />
+              {tagError && (
+                <div className="flex items-start gap-2 p-2 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive">{tagError}</p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -327,7 +526,7 @@ export default function HTMLTagRemover() {
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
           <Button
             onClick={processHTML}
-            disabled={files.length === 0 || !tagsToRemove.trim()}
+            disabled={files.length === 0 || !tagsToRemove.trim() || !!tagError}
             className="flex-1 text-sm sm:text-base h-10 sm:h-11"
           >
             Remove Tags & Process ({files.length} file{files.length !== 1 ? "s" : ""})
